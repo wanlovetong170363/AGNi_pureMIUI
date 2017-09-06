@@ -942,29 +942,14 @@ static int diag_send_raw_data_remote(int proc, void *buf, int len,
 		return -EAGAIN;
 
 	if (driver->hdlc_disabled) {
-		if (len < 4) {
-			pr_err("diag: In %s, invalid len: %d of non_hdlc pkt",
-			__func__, len);
-			return -EBADMSG;
-		}
 		payload = *(uint16_t *)(buf + 2);
 		driver->hdlc_encode_buf_len = payload;
 		/*
-		 * Adding 5 bytes for start (1 byte), version (1 byte),
-		 * payload (2 bytes) and end (1 byte)
+		 * Adding 4 bytes for start (1 byte), version (1 byte) and
+		 * payload (2 bytes)
 		 */
-		if (len == (payload + 5)) {
-			/*
-			 * Adding 4 bytes for start (1 byte), version (1 byte)
-			 * and payload (2 bytes)
-			 */
-			memcpy(driver->hdlc_encode_buf, buf + 4, payload);
-			goto send_data;
-		} else {
-			pr_err("diag: In %s, invalid len: %d of non_hdlc pkt",
-			__func__, len);
-			return -EBADMSG;
-		}
+		memcpy(driver->hdlc_encode_buf, buf + 4, payload);
+		goto send_data;
 	}
 
 	if (hdlc_flag) {
@@ -2954,8 +2939,7 @@ static int diagchar_cleanup(void)
 static int __init diagchar_init(void)
 {
 	dev_t dev;
-	int error, ret;
-	int i;
+	int error, ret, i;
 
 	pr_debug("diagfwd initializing ..\n");
 	ret = 0;
@@ -3006,9 +2990,8 @@ static int __init diagchar_init(void)
 	mutex_init(&driver->diag_file_mutex);
 	mutex_init(&driver->delayed_rsp_mutex);
 	mutex_init(&apps_data_mutex);
-	mutex_init(&driver->msg_mask_lock);
-	mutex_init(&driver->diagfwd_channel_mutex);
-	mutex_init(&driver->hdlc_recovery_mutex);
+	for (i = 0; i < NUM_PERIPHERALS; i++)
+		mutex_init(&driver->diagfwd_channel_mutex[i]);
 	init_waitqueue_head(&driver->wait_q);
 	INIT_WORK(&(driver->diag_drain_work), diag_drain_work_fn);
 	INIT_WORK(&(driver->update_user_clients),

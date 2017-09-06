@@ -472,7 +472,7 @@ struct diagchar_dev {
 	struct list_head cmd_reg_list;
 	struct mutex cmd_reg_mutex;
 	uint32_t cmd_reg_count;
-	struct mutex diagfwd_channel_mutex;
+	struct mutex diagfwd_channel_mutex[NUM_PERIPHERALS];
 	/* Sizes that reflect memory pool sizes */
 	unsigned int poolsize;
 	unsigned int poolsize_hdlc;
@@ -503,7 +503,6 @@ struct diagchar_dev {
 	unsigned char *buf_feature_mask_update;
 	uint8_t hdlc_disabled;
 	struct mutex hdlc_disable_mutex;
-	struct mutex hdlc_recovery_mutex;
 	struct timer_list hdlc_reset_timer;
 	struct mutex diag_hdlc_mutex;
 	unsigned char *hdlc_buf;
@@ -544,10 +543,8 @@ struct diagchar_dev {
 	struct diag_mask_info *event_mask;
 	struct diag_mask_info *build_time_mask;
 	uint8_t msg_mask_tbl_count;
-	uint8_t bt_msg_mask_tbl_count;
 	uint16_t event_mask_size;
 	uint16_t last_event_id;
-	struct mutex msg_mask_lock;
 	/* Variables for Mask Centralization */
 	uint16_t num_event_id[NUM_PERIPHERALS];
 	uint32_t num_equip_id[NUM_PERIPHERALS];

@@ -41,9 +41,6 @@
 
 static DEFINE_MUTEX(mdss_debug_lock);
 
-/* Hex number + whitespace */
-#define NEXT_VALUE_OFFSET 3
-
 static char panel_reg[2] = {DEFAULT_READ_PANEL_POWER_MODE_REG, 0x00};
 
 static int panel_debug_base_open(struct inode *inode, struct file *file)
@@ -142,7 +139,7 @@ static ssize_t panel_debug_base_reg_write(struct file *file,
 	struct mdss_debug_base *dbg = file->private_data;
 	char buf[PANEL_TX_MAX_BUF] = {0x0};
 	char reg[PANEL_TX_MAX_BUF] = {0x0};
-	u32 len = 0, value = 0;
+	u32 len = 0, step = 0, value = 0;
 	char *bufp;
 
 	struct mdss_data_type *mdata = mdss_res;
@@ -165,21 +162,13 @@ static ssize_t panel_debug_base_reg_write(struct file *file,
 	buf[count] = 0;	/* end of string */
 
 	bufp = buf;
-	/* End of a hex value in given string */
-	bufp[NEXT_VALUE_OFFSET - 1] = 0;
-	while (kstrtouint(bufp, 16, &value) == 0) {
+	while (sscanf(bufp, "%x%n", &value, &step) > 0) {
 		reg[len++] = value;
 		if (len >= PANEL_TX_MAX_BUF) {
 			pr_err("wrong input reg len\n");
 			return -EFAULT;
 		}
-		bufp += NEXT_VALUE_OFFSET;
-		if ((bufp >= (buf + count)) || (bufp < buf)) {
-			pr_warn("%s,buffer out-of-bounds\n", __func__);
-			break;
-		}
-		/* End of a hex value in given string */
-		bufp[NEXT_VALUE_OFFSET - 1] = 0;
+		bufp += step;
 	}
 	if (len < PANEL_CMD_MIN_TX_COUNT) {
 		pr_err("wrong input reg len\n");
@@ -1041,10 +1030,10 @@ static ssize_t mdss_debug_perf_bw_limit_read(struct file *file,
 		temp_settings++;
 	}
 
-	if (len < 0 || len >= sizeof(buf))
+	if (len < 0)
 		return 0;
 
-	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
+	if (copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;	/* increase offset */
@@ -1057,7 +1046,7 @@ static ssize_t mdss_debug_perf_bw_limit_write(struct file *file,
 {
 	struct mdss_data_type *mdata = file->private_data;
 	char buf[32];
-	u32 mode = 0, val = 0, cnt;
+	u32 mode, val, cnt;
 	struct mdss_max_bw_settings *temp_settings;
 
 	if (!mdata)

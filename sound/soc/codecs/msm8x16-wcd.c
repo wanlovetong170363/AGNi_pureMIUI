@@ -48,8 +48,7 @@
 #define MSM8X16_WCD_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000)
 #define MSM8X16_WCD_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
-		SNDRV_PCM_FMTBIT_S24_LE |\
-		SNDRV_PCM_FMTBIT_S24_3LE)
+		SNDRV_PCM_FMTBIT_S24_LE)
 
 #define NUM_INTERPOLATORS	3
 #define BITS_PER_REG		8
@@ -4465,7 +4464,6 @@ static int msm8x16_wcd_hw_params(struct snd_pcm_substream *substream,
 				MSM8X16_WCD_A_CDC_CLK_RX_I2S_CTL, 0x20, 0x20);
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
-	case SNDRV_PCM_FORMAT_S24_3LE:
 		snd_soc_update_bits(dai->codec,
 				MSM8X16_WCD_A_CDC_CLK_RX_I2S_CTL, 0x20, 0x00);
 		break;
@@ -5805,6 +5803,8 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 	struct msm8x16_wcd_pdata *pdata;
 	struct resource *wcd_resource;
 	int adsp_state;
+	static int spmi_dev_registered_cnt;
+	int adsp_ver = 0;
 
 	dev_dbg(&spmi->dev, "%s(%d):slave ID = 0x%x\n",
 		__func__, __LINE__,  spmi->sid);
@@ -5816,10 +5816,10 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 		return -EPROBE_DEFER;
 	}
 
-	ret = core_get_adsp_ver();
-	if (ret < 0) {
+	adsp_ver = core_get_adsp_ver();
+	if (adsp_ver < 0) {
 		dev_err(&spmi->dev, "%s: Get adsp version failed %d\n",
-			__func__, ret);
+			__func__, adsp_ver);
 		ret = -EPROBE_DEFER;
 		goto rtn;
 	}
@@ -5849,7 +5849,8 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 		dev_dbg(&spmi->dev,
 				"%s: irq initialization passed\n", __func__);
 	}
-		goto rtn;
+		spmi_dev_registered_cnt++;
+		goto register_codec;
 	default:
 		ret = -EINVAL;
 		goto rtn;
@@ -5913,17 +5914,24 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 		goto err_supplies;
 	}
 	dev_set_drvdata(&spmi->dev, msm8x16);
-
-	ret = snd_soc_register_codec(&spmi->dev, &soc_codec_dev_msm8x16_wcd,
-				     msm8x16_wcd_i2s_dai,
-				     ARRAY_SIZE(msm8x16_wcd_i2s_dai));
-	if (ret) {
-		dev_err(&spmi->dev,
-			"%s:snd_soc_register_codec failed with error %d\n",
-			__func__, ret);
-	} else {
-		goto rtn;
+	spmi_dev_registered_cnt++;
+register_codec:
+	if ((spmi_dev_registered_cnt == MAX_MSM8X16_WCD_DEVICE) && (!ret)) {
+		if (msm8x16_wcd_modules[0].spmi) {
+			ret = snd_soc_register_codec(
+					&msm8x16_wcd_modules[0].spmi->dev,
+					&soc_codec_dev_msm8x16_wcd,
+					msm8x16_wcd_i2s_dai,
+					ARRAY_SIZE(msm8x16_wcd_i2s_dai));
+			if (ret) {
+				dev_err(&spmi->dev,
+				"%s:snd_soc_register_codec failed with error %d\n",
+				__func__, ret);
+				goto err_supplies;
+			}
+		}
 	}
+	return ret;
 err_supplies:
 	msm8x16_wcd_disable_supplies(msm8x16, pdata);
 err_codec:
